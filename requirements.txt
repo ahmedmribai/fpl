@@ -1,0 +1,10 @@
+requests
+pandas
+numpy
+scikit-learn
+lightgbm
+pulp
+schedule
+joblib
+beautifulsoup4
+python-dotenv
