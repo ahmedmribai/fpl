@@ -1,0 +1,27 @@
+name: Weekly FPL Run
+
+on:
+  schedule:
+    - cron:  '0 2 * * THU'    # every Thursday at 02:00 UTC
+  workflow_dispatch:         # also allow manual trigger
+
+jobs:
+  run-optimizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run optimizer
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+          EMAIL_TO:    ${{ secrets.EMAIL_TO }}
+        run: python fpl_manager_advanced.py
