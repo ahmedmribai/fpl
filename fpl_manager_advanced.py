@@ -750,7 +750,23 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     df["fixture_run_4gw"] = df["team"].map(fixture_run_map).fillna(3.0)
     
     # Injury/rotation risk based on minutes and recent starts
-    df["minutes_per_game"] = df["minutes"].fillna(0) / df["games_played"].fillna(1)
+    # Use safe column access for games_played (may not exist in FPL API)
+    def safe_numeric_column(df, col_name, default=0):
+        if col_name in df.columns:
+            return pd.to_numeric(df[col_name].fillna(default), errors='coerce').fillna(default)
+        else:
+            return pd.Series([default] * len(df), index=df.index)
+    
+    # Calculate games played from available data or estimate
+    if 'games_played' in df.columns:
+        games_played = safe_numeric_column(df, "games_played", 1)
+    else:
+        # Estimate games played from minutes (90 min per game)
+        minutes = safe_numeric_column(df, "minutes", 0)
+        games_played = np.maximum(1, np.round(minutes / 90))  # At least 1 game
+        logging.info("'games_played' column not found, estimating from minutes")
+    
+    df["minutes_per_game"] = safe_numeric_column(df, "minutes", 0) / games_played
     df["rotation_risk"] = np.where(
         df["minutes_per_game"] < 60,  # Less than 60 min/game = rotation risk
         1.0 - (df["minutes_per_game"] / 90),  # Higher risk for fewer minutes
