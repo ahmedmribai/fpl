@@ -242,9 +242,4 @@ def pipeline():
 
 
 if __name__ == "__main__":
-    # Schedule weekly (e.g. Monday at 02:00 UTC)
-    schedule.every().monday.at("02:00").do(pipeline)
-    logging.info("Scheduler started; awaiting runs…")
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    main()
