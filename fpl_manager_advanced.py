@@ -1287,9 +1287,12 @@ def optimize(df):
 
 def email_results(squad, df):
     """Send results via email with validation and error handling"""
-    # Validate email configuration
+    # Validate email configuration with debug info
+    logging.info(f"Gmail credential check - GMAIL_USER: {'SET' if GMAIL_USER else 'MISSING'}, GMAIL_PASS: {'SET' if GMAIL_PASS else 'MISSING'}, EMAIL_TO: {'SET' if EMAIL_TO else 'MISSING'}")
+    
     if not all([GMAIL_USER, GMAIL_PASS, EMAIL_TO]):
         logging.warning("Email credentials missing. Saving results locally instead.")
+        logging.warning(f"Missing: GMAIL_USER={'✗' if not GMAIL_USER else '✓'}, GMAIL_PASS={'✗' if not GMAIL_PASS else '✓'}, EMAIL_TO={'✗' if not EMAIL_TO else '✓'}")
         filename = f"fpl_lineup_gw{df.attrs['next_gw']}.csv"
         squad.to_csv(filename, index=False)
         logging.info(f"Results saved to {filename}")
