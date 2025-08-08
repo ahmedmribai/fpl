@@ -549,11 +549,37 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     """
     df = pl.copy()
     
+    # ═══ CRITICAL: Fix Data Types First ═══
+    # Convert string columns to numeric to prevent comparison and model errors
+    logging.info("Converting data types...")
+    
+    # Key columns that must be numeric for optimization and ML
+    numeric_columns = [
+        'selected_by_percent', 'now_cost', 'total_points', 'points_per_game',
+        'minutes', 'goals_scored', 'assists', 'clean_sheets', 'goals_conceded',
+        'own_goals', 'penalties_saved', 'penalties_missed', 'yellow_cards',
+        'red_cards', 'saves', 'bonus', 'bps', 'influence', 'creativity', 'threat',
+        'ict_index', 'value', 'transfers_in', 'transfers_out'
+    ]
+    
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        else:
+            logging.debug(f"Column '{col}' not found, skipping conversion")
+    
+    logging.info(f"Data type conversion completed for {len([c for c in numeric_columns if c in df.columns])} columns")
+    
     # ─── EXTERNAL TRANSFER INTEGRATION ─────────────────────────────────────
     # Load and integrate data from other leagues for new signings
     external_data = load_external_transfer_data()
     df = integrate_external_players(df, external_data)
     logging.info("Integrated external transfer data")
+    
+    # Ensure all numeric columns are still numeric after integration
+    for col in ['selected_by_percent', 'now_cost', 'total_points', 'points_per_game']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     # ─── Core Stats ────────────────────────────────────────────
     df["value"]    = df["now_cost"] / 10
