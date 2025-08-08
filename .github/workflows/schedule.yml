@@ -2,7 +2,7 @@ name: Weekly FPL Run
 
 on:
   schedule:
-    - cron:  '0 2 * * THU'    # every Thursday at 02:00 UTC
+    - cron:  '0 8 * * FRI'    # every Friday at 09:00 UTC
   workflow_dispatch:         # also allow manual trigger
 
 jobs:
