@@ -510,7 +510,6 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     # ─── Bonus Points System (BPS) Tweaks ───────────────────────
     df["bps_old"]     = df["bps"].astype(float)
     df["bps_tweaked"] = df["bps_old"]  # ready for real event-based recalculation
-{{ ... }}
 
     # ─── Fixture Difficulty Rating (FDR) ────────────────────────
     next_gw = int(fx.loc[fx["is_next"], "id"].iloc[0])
