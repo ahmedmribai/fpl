@@ -1345,7 +1345,7 @@ def email_results(squad, df):
         Top Elite Pick: {squad.nlargest(1, 'elite_ownership')['web_name'].iloc[0]} ({squad.nlargest(1, 'elite_ownership')['elite_ownership'].iloc[0]:.1%} ownership)
         Elite Captain Choice: {squad.nlargest(1, 'elite_captain_rate')['web_name'].iloc[0]} ({squad.nlargest(1, 'elite_captain_rate')['elite_captain_rate'].iloc[0]:.1%} captain rate)
         Best Differential: {squad.nlargest(1, 'elite_differential')['web_name'].iloc[0]} (Elite: {squad.nlargest(1, 'elite_differential')['elite_ownership'].iloc[0]:.1%}, General: {squad.nlargest(1, 'elite_differential')['selected_by_percent'].iloc[0]:.1f}%)
-        Template Players: {len(squad[squad.get('template_score', pd.Series([0]*len(squad))) > 0.5])} players
+        Template Players: {len(squad[squad['template_score'] > 0.5]) if 'template_score' in squad.columns else 0} players
         Crowd Wisdom Score: {squad['crowd_wisdom_score'].mean():.2f}/1.00
         
         🔥 FIXTURE DIFFICULTY ANALYSIS:
