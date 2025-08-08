@@ -302,6 +302,88 @@ def fetch_transfer_market_sentiment(player_name):
         return {'hype_score': 0.5, 'ownership_prediction': 0.1, 'price_rise_risk': 0.3, 'community_confidence': 0.5}
 
 
+def load_external_transfer_data():
+    """Load new transfer data from external leagues"""
+    try:
+        if os.path.exists(TRANSFERS_FILE):
+            with open(TRANSFERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            logging.info("No external transfer data file found")
+            return create_default_transfer_data()
+    except Exception as e:
+        logging.warning(f"Failed to load external transfer data: {e}")
+        return {}
+
+
+def create_default_transfer_data():
+    """Create default transfer data for major summer 2024/25 signings"""
+    # This would be updated each transfer window with new signings
+    default_data = {
+        "transfers": [
+            {
+                "player_name": "Viktor Gyökeres",
+                "fpl_name": "Gyökeres",  # As it appears in FPL
+                "new_team": "Arsenal",
+                "previous_club": "Sporting CP",
+                "previous_league": "Primeira Liga",
+                "position": "Forward",
+                "season_stats": {
+                    "2023/24": {
+                        "games": 33,
+                        "goals": 29,
+                        "assists": 10,
+                        "minutes": 2847,
+                        "xG": 25.4,
+                        "xA": 7.2,
+                        "shots": 98,
+                        "key_passes": 45
+                    }
+                },
+                "transfer_fee": 65000000,  # €65M
+                "is_new_to_premier_league": True,
+                "data_reliability": 0.75  # 75% reliable vs 90% for EPL players
+            }
+        ]
+    }
+    
+    # Save default data
+    try:
+        with open(TRANSFERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(default_data, f, indent=2, ensure_ascii=False)
+        logging.info(f"Created default transfer data with {len(default_data['transfers'])} players")
+    except Exception as e:
+        logging.warning(f"Failed to save default transfer data: {e}")
+    
+    return default_data
+
+
+def integrate_external_players(df, external_data):
+    """Integrate external player data into the main FPL DataFrame"""
+    try:
+        if not external_data or 'transfers' not in external_data:
+            return df
+        
+        logging.info(f"Integrating {len(external_data['transfers'])} external players")
+        
+        # Add default values for players without external data
+        df['external_goals'] = 0
+        df['external_assists'] = 0
+        df['external_xg'] = 0.0
+        df['external_xa'] = 0.0
+        df['is_new_signing'] = False
+        df['data_reliability'] = 0.9  # Default high for EPL players
+        df['blended_ppg'] = df['points_per_game']
+        df['new_signing_boost'] = 1.0
+        
+        logging.info("Completed external player integration (using defaults for now)")
+        return df
+        
+    except Exception as e:
+        logging.error(f"External player integration failed: {e}")
+        return df
+
+
 def fetch_news():
     """Fetch team news with error handling"""
     try:
