@@ -113,26 +113,164 @@ def fetch_fpl():
 def fetch_understat_xg_data():
     """Fetch Expected Goals/Assists data from Understat or similar source"""
     try:
-        # Note: This is a placeholder implementation
-        # In practice, you'd use APIs like:
-        # - Understat API (requires scraping)
-        # - FBref API 
-        # - FPL's own xG data if available
-        # - Third-party aggregators
+        # Try to get real shots data from multiple sources
+        real_shots_data = fetch_real_shots_data()
         
-        # For now, we'll try to get any xG data from FPL's detailed player endpoint
-        logging.info("Attempting to fetch xG/xA data...")
+        if real_shots_data:
+            logging.info("Successfully fetched real shots data")
+            return real_shots_data
         
-        # FPL sometimes includes xG data in individual player history
-        # This is a simplified approach - you might need to enhance based on available data
-        xg_data = {}  # player_id -> {xg, xa}
-        
-        # Alternative: Use proxy metrics from existing FPL data that correlate with xG/xA
+        # Fallback to proxy metrics
         logging.info("Using FPL proxy metrics for xG/xA calculation")
         return None  # Will calculate proxies in preprocessing
         
     except Exception as e:
         logging.warning(f"Failed to fetch xG/xA data: {e}")
+        return None
+
+
+def fetch_real_shots_data():
+    """Fetch real shots on target data from external sources"""
+    try:
+        shots_data = {}
+        
+        # Method 1: Try FBRef scraping
+        fbref_data = fetch_fbref_shots_data()
+        if fbref_data:
+            shots_data.update(fbref_data)
+            
+        # Method 2: Try Understat API
+        understat_data = fetch_understat_shots_api()
+        if understat_data:
+            shots_data.update(understat_data)
+            
+        # Method 3: Try detailed FPL endpoints
+        fpl_detailed = fetch_detailed_fpl_shots()
+        if fpl_detailed:
+            shots_data.update(fpl_detailed)
+            
+        if shots_data:
+            logging.info(f"Fetched real shots data for {len(shots_data)} players")
+            return shots_data
+        else:
+            logging.info("No real shots data available, will use proxies")
+            return None
+            
+    except Exception as e:
+        logging.warning(f"Real shots data fetch failed: {e}")
+        return None
+
+
+def fetch_fbref_shots_data():
+    """Scrape shots data from FBRef"""
+    try:
+        import time
+        from urllib.parse import urljoin
+        
+        # FBRef Premier League stats page
+        base_url = "https://fbref.com/en/comps/9/stats/Premier-League-Stats"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        logging.info("Fetching FBRef Premier League stats...")
+        response = requests.get(base_url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logging.warning(f"FBRef request failed: HTTP {response.status_code}")
+            return None
+            
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Find the stats table (shooting stats)
+        shooting_table = None
+        for table in soup.find_all('table'):
+            if 'shooting' in table.get('id', '').lower():
+                shooting_table = table
+                break
+                
+        if not shooting_table:
+            # Try standard stats table
+            shooting_table = soup.find('table', {'id': 'stats_standard'})
+            
+        if not shooting_table:
+            logging.warning("Could not find shooting stats table on FBRef")
+            return None
+            
+        shots_data = {}
+        
+        # Parse table rows
+        tbody = shooting_table.find('tbody')
+        if tbody:
+            for row in tbody.find_all('tr'):
+                try:
+                    # Get player name
+                    player_cell = row.find('td', {'data-stat': 'player'})
+                    if not player_cell:
+                        continue
+                        
+                    player_name = player_cell.get_text(strip=True)
+                    
+                    # Get shots data
+                    shots_cell = row.find('td', {'data-stat': 'shots'})
+                    shots_on_target_cell = row.find('td', {'data-stat': 'shots_on_target'})
+                    
+                    if shots_cell and shots_on_target_cell:
+                        shots = float(shots_cell.get_text(strip=True) or 0)
+                        shots_on_target = float(shots_on_target_cell.get_text(strip=True) or 0)
+                        
+                        # Store by player name (will need to match to FPL later)
+                        shots_data[player_name] = {
+                            'shots': shots,
+                            'shots_on_target': shots_on_target,
+                            'shot_accuracy': (shots_on_target / shots * 100) if shots > 0 else 0
+                        }
+                        
+                except (ValueError, AttributeError, ZeroDivisionError) as e:
+                    logging.debug(f"Error parsing row: {e}")
+                    continue
+                    
+        # Rate limiting
+        time.sleep(2)
+        
+        if shots_data:
+            logging.info(f"Successfully scraped FBRef data for {len(shots_data)} players")
+            return shots_data
+        else:
+            logging.warning("No shots data found in FBRef table")
+            return None
+            
+    except Exception as e:
+        logging.warning(f"FBRef shots scraping failed: {e}")
+        return None
+
+
+def fetch_understat_shots_api():
+    """Get shots data from Understat"""
+    try:
+        # This would implement Understat API calls
+        # For now, return None to use proxies
+        
+        logging.info("Understat shots data not implemented yet")
+        return None
+        
+    except Exception as e:
+        logging.warning(f"Understat shots fetch failed: {e}")
+        return None
+
+
+def fetch_detailed_fpl_shots():
+    """Try FPL detailed player endpoints for shots data"""
+    try:
+        # Try to get additional stats from individual player endpoints
+        # Some seasons FPL includes more detailed metrics
+        
+        logging.info("FPL detailed shots data not implemented yet")
+        return None
+        
+    except Exception as e:
+        logging.warning(f"FPL detailed shots fetch failed: {e}")
         return None
 
 
@@ -460,22 +598,30 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
         logging.info("Using external xG/xA data")
     else:
         # Calculate xG proxies from available FPL metrics
-        # xG proxy: shots, shots on target, big chances, penalty area touches
+        # Use safe column access with fallbacks for missing columns
+        def safe_numeric_column(df, col_name, default=0):
+            if col_name in df.columns:
+                return pd.to_numeric(df[col_name].fillna(default), errors='coerce').fillna(default)
+            else:
+                logging.warning(f"Column '{col_name}' not found in FPL data, using default value {default}")
+                return pd.Series([default] * len(df), index=df.index)
+        
+        # xG proxy: goals, threat, creativity (using available FPL columns)
         df["expected_goals"] = (
-            pd.to_numeric(df["goals_scored"].fillna(0), errors='coerce').fillna(0) * 0.3 +  # Historical conversion
-            pd.to_numeric(df["shots_on_target"].fillna(0), errors='coerce').fillna(0) * 0.15 +  # Shot quality
-            pd.to_numeric(df["big_chances_created"].fillna(0), errors='coerce').fillna(0) * 0.1 +  # Quality chances
-            pd.to_numeric(df["penalty_area_entries"].fillna(0), errors='coerce').fillna(0) * 0.05 +  # Position
-            pd.to_numeric(df["threat"].fillna(0), errors='coerce').fillna(0) * 0.001  # FPL threat index
+            safe_numeric_column(df, "goals_scored", 0) * 0.4 +  # Historical conversion (higher weight)
+            safe_numeric_column(df, "threat", 0) * 0.002 +  # FPL threat index (higher weight)
+            safe_numeric_column(df, "creativity", 0) * 0.001 +  # Some forwards get creative
+            safe_numeric_column(df, "bonus", 0) * 0.1 +  # Bonus points indicate good performance
+            safe_numeric_column(df, "minutes", 0) * 0.001  # Playing time factor
         )
         
-        # xA proxy: key passes, crosses, through balls, assists
+        # xA proxy: assists, creativity (using available FPL columns)
         df["expected_assists"] = (
-            pd.to_numeric(df["assists"].fillna(0), errors='coerce').fillna(0) * 0.4 +  # Historical assists
-            pd.to_numeric(df["key_passes"].fillna(0), errors='coerce').fillna(0) * 0.08 +  # Key passes
-            pd.to_numeric(df["crosses"].fillna(0), errors='coerce').fillna(0) * 0.03 +  # Crosses
-            pd.to_numeric(df["creativity"].fillna(0), errors='coerce').fillna(0) * 0.002 +  # FPL creativity
-            pd.to_numeric(df["big_chances_created"].fillna(0), errors='coerce').fillna(0) * 0.15  # Quality creation
+            safe_numeric_column(df, "assists", 0) * 0.5 +  # Historical assists (primary)
+            safe_numeric_column(df, "creativity", 0) * 0.003 +  # FPL creativity (higher weight)
+            safe_numeric_column(df, "bonus", 0) * 0.05 +  # Bonus points for assists
+            safe_numeric_column(df, "minutes", 0) * 0.0005 +  # Playing time factor
+            safe_numeric_column(df, "yellow_cards", 0) * -0.1  # Yellow cards reduce assists
         )
         logging.info("Using FPL proxy metrics for xG/xA calculation")
     
@@ -501,10 +647,16 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     df["combined_xg_xa_per_90"] = df["xg_per_90"] + df["xa_per_90"]
     
     # Enhanced Assist Prediction using xA ─────────────────────────────
+    def safe_numeric_column(df, col_name, default=0):
+        if col_name in df.columns:
+            return pd.to_numeric(df[col_name].fillna(default), errors='coerce').fillna(default)
+        else:
+            return pd.Series([default] * len(df), index=df.index)
+    
     df["assist_boost"] = (
         df["expected_assists"] * 0.7 +  # Expected assists (primary)
-        pd.to_numeric(df["assists"].fillna(0), errors='coerce').fillna(0) * 0.2 +  # Historical assists
-        pd.to_numeric(df["creativity"].fillna(0), errors='coerce').fillna(0) * 0.001  # FPL creativity index
+        safe_numeric_column(df, "assists", 0) * 0.2 +  # Historical assists
+        safe_numeric_column(df, "creativity", 0) * 0.001  # FPL creativity index
     )
 
     # ─── Bonus Points System (BPS) Tweaks ───────────────────────
