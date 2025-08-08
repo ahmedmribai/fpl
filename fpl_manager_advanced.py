@@ -85,7 +85,7 @@ def fetch_fpl():
     for attempt in range(max_retries):
         try:
             # Fetch bootstrap data
-            r = requests.get(f"{FPL_API}/bootstrap-static/", timeout=30)
+            r = requests.get(f"{FPL_BASE_URL}/bootstrap-static/", timeout=30)
             r.raise_for_status()
             data = r.json()
             
@@ -94,7 +94,7 @@ def fetch_fpl():
             fx = pd.DataFrame(data["events"])
             
             # Fetch fixtures for difficulty ratings
-            r_fixtures = requests.get(f"{FPL_API}/fixtures/", timeout=30)
+            r_fixtures = requests.get(f"{FPL_BASE_URL}/fixtures/", timeout=30)
             r_fixtures.raise_for_status()
             fixtures = pd.DataFrame(r_fixtures.json())
             
@@ -198,7 +198,7 @@ def fetch_current_elite_picks(current_gw):
         
         for manager_id in elite_manager_ids[:min(100, len(elite_manager_ids))]:
             try:
-                url = f"{FPL_API}/entry/{manager_id}/event/{current_gw}/picks/"
+                url = f"{FPL_BASE_URL}/entry/{manager_id}/event/{current_gw}/picks/"
                 response = requests.get(url, timeout=10)
                 
                 if response.status_code == 200:
@@ -252,7 +252,7 @@ def get_top_manager_sample():
     """Get sample of top-performing manager IDs"""
     try:
         # Fetch from overall league (ID 314 is overall league)
-        url = f"{FPL_API}/leagues-classic/314/standings/?page_standings=1"
+        url = f"{FPL_BASE_URL}/leagues-classic/314/standings/?page_standings=1"
         response = requests.get(url, timeout=15)
         
         if response.status_code == 200:
@@ -1109,7 +1109,7 @@ def validate_config():
     
     # Check API accessibility
     try:
-        response = requests.get(FPL_API + "/bootstrap-static/", timeout=10)
+        response = requests.get(FPL_BASE_URL + "/bootstrap-static/", timeout=10)
         if response.status_code != 200:
             issues.append(f"FPL API unreachable: HTTP {response.status_code}")
     except Exception as e:
