@@ -437,8 +437,9 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     # CBIRT proxy for mids/forwards: based on goals, assists, key passes, shots
     df["cbirt"] = np.where(
         ~is_def,
-        df["goals_scored"].fillna(0) * 3 + df["assists"].fillna(0) * 2 + 
-        df["creativity"].fillna(0) * 0.01 + df["threat"].fillna(0) * 0.01,
+        df["goals_scored"].fillna(0).astype(float) * 3 + df["assists"].fillna(0).astype(float) * 2 + 
+        pd.to_numeric(df["creativity"].fillna(0), errors='coerce').fillna(0) * 0.01 + 
+        pd.to_numeric(df["threat"].fillna(0), errors='coerce').fillna(0) * 0.01,
         0  # defenders get 0 CBIRT
     )
     
@@ -461,20 +462,20 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
         # Calculate xG proxies from available FPL metrics
         # xG proxy: shots, shots on target, big chances, penalty area touches
         df["expected_goals"] = (
-            df["goals_scored"].fillna(0).astype(float) * 0.3 +  # Historical conversion
-            df["shots_on_target"].fillna(0).astype(float) * 0.15 +  # Shot quality
-            df["big_chances_created"].fillna(0).astype(float) * 0.1 +  # Quality chances
-            df["penalty_area_entries"].fillna(0).astype(float) * 0.05 +  # Position
-            df["threat"].fillna(0).astype(float) * 0.001  # FPL threat index
+            pd.to_numeric(df["goals_scored"].fillna(0), errors='coerce').fillna(0) * 0.3 +  # Historical conversion
+            pd.to_numeric(df["shots_on_target"].fillna(0), errors='coerce').fillna(0) * 0.15 +  # Shot quality
+            pd.to_numeric(df["big_chances_created"].fillna(0), errors='coerce').fillna(0) * 0.1 +  # Quality chances
+            pd.to_numeric(df["penalty_area_entries"].fillna(0), errors='coerce').fillna(0) * 0.05 +  # Position
+            pd.to_numeric(df["threat"].fillna(0), errors='coerce').fillna(0) * 0.001  # FPL threat index
         )
         
         # xA proxy: key passes, crosses, through balls, assists
         df["expected_assists"] = (
-            df["assists"].fillna(0).astype(float) * 0.4 +  # Historical assists
-            df["key_passes"].fillna(0).astype(float) * 0.08 +  # Key passes
-            df["crosses"].fillna(0).astype(float) * 0.03 +  # Crosses
-            df["creativity"].fillna(0).astype(float) * 0.002 +  # FPL creativity
-            df["big_chances_created"].fillna(0).astype(float) * 0.15  # Quality creation
+            pd.to_numeric(df["assists"].fillna(0), errors='coerce').fillna(0) * 0.4 +  # Historical assists
+            pd.to_numeric(df["key_passes"].fillna(0), errors='coerce').fillna(0) * 0.08 +  # Key passes
+            pd.to_numeric(df["crosses"].fillna(0), errors='coerce').fillna(0) * 0.03 +  # Crosses
+            pd.to_numeric(df["creativity"].fillna(0), errors='coerce').fillna(0) * 0.002 +  # FPL creativity
+            pd.to_numeric(df["big_chances_created"].fillna(0), errors='coerce').fillna(0) * 0.15  # Quality creation
         )
         logging.info("Using FPL proxy metrics for xG/xA calculation")
     
@@ -499,16 +500,17 @@ def preprocess(pl, tm, fx, fixtures, news, xg_data=None, elite_data=None):
     df["combined_xg_xa"] = df["expected_goals"] + df["expected_assists"]
     df["combined_xg_xa_per_90"] = df["xg_per_90"] + df["xa_per_90"]
     
-    # ─── Enhanced Assist Prediction using xA ─────────────────────────────
+    # Enhanced Assist Prediction using xA ─────────────────────────────
     df["assist_boost"] = (
-        df["expected_assists"] * 0.6 +  # Expected assists (primary)
-        df["assists"].fillna(0).astype(float) * 0.3 +  # Historical assists
-        df["creativity"].fillna(0).astype(float) * 0.001  # FPL creativity index
+        df["expected_assists"] * 0.7 +  # Expected assists (primary)
+        pd.to_numeric(df["assists"].fillna(0), errors='coerce').fillna(0) * 0.2 +  # Historical assists
+        pd.to_numeric(df["creativity"].fillna(0), errors='coerce').fillna(0) * 0.001  # FPL creativity index
     )
 
     # ─── Bonus Points System (BPS) Tweaks ───────────────────────
     df["bps_old"]     = df["bps"].astype(float)
     df["bps_tweaked"] = df["bps_old"]  # ready for real event-based recalculation
+{{ ... }}
 
     # ─── Fixture Difficulty Rating (FDR) ────────────────────────
     next_gw = int(fx.loc[fx["is_next"], "id"].iloc[0])
