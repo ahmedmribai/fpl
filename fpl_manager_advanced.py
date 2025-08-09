@@ -1285,98 +1285,107 @@ def optimize(df):
     return squad.sort_values("exp_pts", ascending=False)
 
 
-def email_results(squad, df):
-    """Send results via email with validation and error handling"""
-    # Validate email configuration with debug info
-    logging.info(f"Gmail credential check - GMAIL_USER: {'SET' if GMAIL_USER else 'MISSING'}, GMAIL_PASS: {'SET' if GMAIL_PASS else 'MISSING'}, EMAIL_TO: {'SET' if EMAIL_TO else 'MISSING'}")
+def save_and_access_results(squad, df):
+    """Save results with multiple easy access options (better than email!)"""
+    import os
+    import shutil
+    from pathlib import Path
     
-    if not all([GMAIL_USER, GMAIL_PASS, EMAIL_TO]):
-        logging.warning("Email credentials missing. Saving results locally instead.")
-        logging.warning(f"Missing: GMAIL_USER={'✗' if not GMAIL_USER else '✓'}, GMAIL_PASS={'✗' if not GMAIL_PASS else '✓'}, EMAIL_TO={'✗' if not EMAIL_TO else '✓'}")
-        filename = f"fpl_lineup_gw{df.attrs['next_gw']}.csv"
-        squad.to_csv(filename, index=False)
-        logging.info(f"Results saved to {filename}")
-        return
+    # Generate comprehensive filename with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_filename = f"fpl_lineup_gw{df.attrs['next_gw']}_{timestamp}"
     
+    # 🎯 OPTION 1: Save to multiple easy-to-find locations
+    locations = []
+    
+    # Current directory (where script runs)
+    current_file = f"{base_filename}.csv"
+    squad.to_csv(current_file, index=False)
+    locations.append(os.path.abspath(current_file))
+    
+    # Desktop copy (most accessible)
     try:
-        logging.info("Sending lineup via Gmail…")
-        msg = MIMEMultipart()
-        msg["From"]    = GMAIL_USER
-        msg["To"]      = EMAIL_TO
-        msg["Subject"] = (
-            f"FPL GW{df.attrs['next_gw']} Lineup "
-            f"(Free transfers: {df.attrs['free_transfers']})"
-        )
-        
-        # Enhanced summary with captaincy and advanced metrics
-        captain_name = squad[squad['is_captain']]['web_name'].iloc[0] if squad['is_captain'].any() else "Unknown"
-        vice_name = squad[squad['is_vice']]['web_name'].iloc[0] if squad['is_vice'].any() else "Unknown"
-        
-        total_value = squad['value'].sum()
-        total_exp_pts = squad[squad['is_start']]['exp_pts'].sum()
-        captain_exp_pts = squad[squad['is_captain']]['exp_pts'].sum() if squad['is_captain'].any() else 0
-        
-        summary = f"""
-        🏆 FPL LINEUP - GAMEWEEK {df.attrs['next_gw']}
-        📊 Expected Points: {total_exp_pts:.1f} (+ {captain_exp_pts:.1f} captain bonus)
-        💰 Team Value: £{total_value:.1f}M
-        🔄 Free Transfers: {df.attrs['free_transfers']}
-        
-        ⭐ CAPTAIN: {captain_name} ({squad[squad['is_captain']]['exp_pts'].iloc[0]:.1f} pts)
-        🥈 VICE-CAPTAIN: {vice_name} ({squad[squad['is_vice']]['exp_pts'].iloc[0]:.1f} pts)
-        
-        🏁 STARTING XI:
-        {squad[squad['is_start']].to_string(index=False, columns=['web_name', 'element_type_name', 'team', 'exp_pts', 'value'])}
-        
-        🪑 BENCH:
-        {squad[~squad['is_start']].to_string(index=False, columns=['web_name', 'element_type_name', 'team', 'exp_pts', 'value'])}
-        
-        📈 TOP PERFORMERS BY POSITION:
-        GK: {squad[(squad['element_type_name'] == 'GK')].nlargest(1, 'exp_pts')['web_name'].iloc[0] if len(squad[squad['element_type_name'] == 'GK']) > 0 else 'None'}
-        DEF: {', '.join(squad[(squad['element_type_name'] == 'DEF')].nlargest(2, 'exp_pts')['web_name'].tolist())}
-        MID: {', '.join(squad[(squad['element_type_name'] == 'MID')].nlargest(2, 'exp_pts')['web_name'].tolist())}
-        FWD: {', '.join(squad[(squad['element_type_name'] == 'FWD')].nlargest(2, 'exp_pts')['web_name'].tolist())}
-        
-        ⚽ EXPECTED GOALS/ASSISTS ANALYSIS:
-        Highest xG: {squad.nlargest(1, 'expected_goals')['web_name'].iloc[0]} ({squad.nlargest(1, 'expected_goals')['expected_goals'].iloc[0]:.2f})
-        Highest xA: {squad.nlargest(1, 'expected_assists')['web_name'].iloc[0]} ({squad.nlargest(1, 'expected_assists')['expected_assists'].iloc[0]:.2f})
-        Best xG+xA: {squad.nlargest(1, 'combined_xg_xa')['web_name'].iloc[0]} ({squad.nlargest(1, 'combined_xg_xa')['combined_xg_xa'].iloc[0]:.2f})
-        Overperforming xG: {len(squad[squad['goals_vs_xg'] > 0])} players
-        Overperforming xA: {len(squad[squad['assists_vs_xa'] > 0])} players
-        
-        🧠 ELITE MANAGER WISDOM:
-        Top Elite Pick: {squad.nlargest(1, 'elite_ownership')['web_name'].iloc[0]} ({squad.nlargest(1, 'elite_ownership')['elite_ownership'].iloc[0]:.1%} ownership)
-        Elite Captain Choice: {squad.nlargest(1, 'elite_captain_rate')['web_name'].iloc[0]} ({squad.nlargest(1, 'elite_captain_rate')['elite_captain_rate'].iloc[0]:.1%} captain rate)
-        Best Differential: {squad.nlargest(1, 'elite_differential')['web_name'].iloc[0]} (Elite: {squad.nlargest(1, 'elite_differential')['elite_ownership'].iloc[0]:.1%}, General: {squad.nlargest(1, 'elite_differential')['selected_by_percent'].iloc[0]:.1f}%)
-        Template Players: {len(squad[squad['template_score'] > 0.5]) if 'template_score' in squad.columns else 0} players
-        Crowd Wisdom Score: {squad['crowd_wisdom_score'].mean():.2f}/1.00
-        
-        🔥 FIXTURE DIFFICULTY ANALYSIS:
-        Easy Fixtures (≤2): {len(squad[squad['fdr_next'] <= 2])} players
-        Hard Fixtures (≥4): {len(squad[squad['fdr_next'] >= 4])} players
-        
-        Generated by FPL Advanced Optimizer v3.0 (with Elite Manager Wisdom)
-        """
-        msg.attach(MIMEText(summary, 'plain'))
-        
-        # Add CSV attachment
-        csv = squad.to_csv(index=False).encode()
-        part = MIMEApplication(csv, Name="lineup.csv")
-        part['Content-Disposition'] = 'attachment; filename="lineup.csv"'
-        msg.attach(part)
-
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(GMAIL_USER, GMAIL_PASS)
-            smtp.send_message(msg)
-            
-        logging.info("Email sent successfully")
-        
+        desktop = Path.home() / "Desktop" 
+        if desktop.exists():
+            desktop_file = desktop / f"{base_filename}.csv"
+            shutil.copy2(current_file, desktop_file)
+            locations.append(str(desktop_file))
+            logging.info(f"✅ EASY ACCESS: File copied to Desktop -> {desktop_file.name}")
     except Exception as e:
-        logging.error(f"Failed to send email: {e}")
-        # Fallback: save locally
-        filename = f"fpl_lineup_gw{df.attrs['next_gw']}.csv"
-        squad.to_csv(filename, index=False)
-        logging.info(f"Results saved locally to {filename}")
+        logging.debug(f"Desktop copy failed: {e}")
+    
+    # Documents folder copy
+    try:
+        documents = Path.home() / "Documents" / "FPL_Lineups"
+        documents.mkdir(exist_ok=True)
+        docs_file = documents / f"{base_filename}.csv"
+        shutil.copy2(current_file, docs_file)
+        locations.append(str(docs_file))
+        logging.info(f"📁 ORGANIZED: File saved to Documents/FPL_Lineups -> {docs_file.name}")
+    except Exception as e:
+        logging.debug(f"Documents copy failed: {e}")
+    
+    # 🎯 OPTION 2: Auto-open the file (Windows)
+    try:
+        if os.name == 'nt':  # Windows
+            os.startfile(current_file)
+            logging.info("🚀 AUTO-OPENED: CSV file opened in Excel/default app!")
+        else:  # Mac/Linux
+            import subprocess
+            subprocess.run(['open' if sys.platform == 'darwin' else 'xdg-open', current_file])
+            logging.info("🚀 AUTO-OPENED: CSV file opened in default app!")
+    except Exception as e:
+        logging.debug(f"Auto-open failed: {e}")
+    
+    # 🎯 OPTION 3: Show desktop notification (Windows)
+    try:
+        if os.name == 'nt':
+            import subprocess
+            captain_name = squad[squad['is_captain']]['web_name'].iloc[0] if squad['is_captain'].any() else "Unknown"
+            total_exp_pts = squad[squad['is_start']]['exp_pts'].sum()
+            captain_exp_pts = squad[squad['is_captain']]['exp_pts'].sum() if squad['is_captain'].any() else 0
+            
+            notification_msg = f"FPL GW{df.attrs['next_gw']} Lineup Ready! Captain: {captain_name}, Expected: {total_exp_pts + captain_exp_pts:.1f} pts"
+            # Windows toast notification
+            subprocess.run([
+                'powershell', '-Command', 
+                f'[reflection.assembly]::loadwithpartialname("System.Windows.Forms"); [reflection.assembly]::loadwithpartialname("System.Drawing"); $notify = new-object system.windows.forms.notifyicon; $notify.icon = [System.Drawing.SystemIcons]::Information; $notify.visible = $true; $notify.showballoontip(10000,"FPL Optimizer","{notification_msg}","info")'
+            ], shell=True, capture_output=True)
+            logging.info("🔔 NOTIFICATION: Desktop notification sent!")
+    except Exception as e:
+        logging.debug(f"Notification failed: {e}")
+    
+    # 🎯 OPTION 4: Print summary to console for immediate viewing
+    captain_name = squad[squad['is_captain']]['web_name'].iloc[0] if squad['is_captain'].any() else "Unknown"
+    vice_name = squad[squad['is_vice']]['web_name'].iloc[0] if squad['is_vice'].any() else "Unknown"
+    total_exp_pts = squad[squad['is_start']]['exp_pts'].sum()
+    captain_exp_pts = squad[squad['is_captain']]['exp_pts'].sum() if squad['is_captain'].any() else 0
+    
+    print("\n" + "="*60)
+    print(f"🏆 FPL LINEUP - GAMEWEEK {df.attrs['next_gw']}")
+    print("="*60)
+    print(f"⭐ CAPTAIN: {captain_name} ({squad[squad['is_captain']]['exp_pts'].iloc[0]:.1f} pts)")
+    print(f"🥈 VICE-CAPTAIN: {vice_name}")
+    print(f"📊 Expected Points: {total_exp_pts:.1f} + {captain_exp_pts:.1f} = {total_exp_pts + captain_exp_pts:.1f} pts")
+    print(f"💰 Team Value: £{squad['value'].sum():.1f}M")
+    print("\n🏁 STARTING XI:")
+    starting_xi = squad[squad['is_start']][['web_name', 'element_type_name', 'exp_pts', 'value']]
+    for _, player in starting_xi.iterrows():
+        print(f"  {player['web_name']} ({player['element_type_name']}) - {player['exp_pts']:.1f} pts")
+    print("\n🪑 BENCH:")
+    bench = squad[~squad['is_start']][['web_name', 'element_type_name', 'exp_pts']]
+    for _, player in bench.iterrows():
+        print(f"  {player['web_name']} ({player['element_type_name']}) - {player['exp_pts']:.1f} pts")
+    print("\n📁 FILE LOCATIONS:")
+    for i, location in enumerate(locations, 1):
+        print(f"  {i}. {location}")
+    print("="*60 + "\n")
+    
+    logging.info(f"🎯 SUCCESS: {len(locations)} copies saved, console summary displayed!")
+    return locations
+        
+
 
 
 def validate_config():
@@ -1451,9 +1460,9 @@ def pipeline():
             logging.error("Team optimization failed completely")
             return False
         
-        # Send results
-        logging.info("Sending results...")
-        email_results(squad, df)
+        # Save and access results (multiple easy options!)
+        logging.info("Saving results with easy access options...")
+        file_locations = save_and_access_results(squad, df)
         
         # Retrain model for next time
         logging.info("Retraining model with latest data...")
