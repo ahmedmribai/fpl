@@ -1303,20 +1303,42 @@ def save_and_access_results(squad, df):
     current_file = f"{base_filename}.csv"
     
     # Create enhanced CSV with key columns for easy viewing
-    enhanced_squad = squad[[
-        'web_name',           # Player name
-        'team_name',          # Current team (Arsenal, Liverpool, etc.)
-        'element_type_name',  # Position (GK, DEF, MID, FWD)
-        'now_cost',          # Current FPL price (in 0.1M units)
-        'value',             # Current FPL price (in M units, easier to read)
-        'exp_pts',           # Expected points
-        'is_start',          # Starting XI (True/False)
-        'is_captain',        # Captain (True/False)
-        'is_vice',           # Vice-captain (True/False)
-        'selected_by_percent', # Ownership %
-        'total_points',      # Season points so far
-        'points_per_game'    # Points per game average
-    ]].copy()
+    # Check available columns and use safe selection
+    available_columns = squad.columns.tolist()
+    logging.info(f"Available squad columns: {available_columns[:10]}...")  # Log first 10 for debugging
+    
+    # Define desired columns with fallbacks
+    column_mapping = {
+        'web_name': 'web_name',
+        'team': 'team',  # FPL uses 'team' (ID), not 'team_name'
+        'element_type_name': 'element_type_name',
+        'now_cost': 'now_cost',
+        'value': 'value',
+        'exp_pts': 'exp_pts',
+        'is_start': 'is_start',
+        'is_captain': 'is_captain',
+        'is_vice': 'is_vice',
+        'selected_by_percent': 'selected_by_percent',
+        'total_points': 'total_points',
+        'points_per_game': 'points_per_game'
+    }
+    
+    # Select only columns that exist
+    selected_columns = [col for col in column_mapping.values() if col in available_columns]
+    enhanced_squad = squad[selected_columns].copy()
+    
+    # Add team name mapping if we have team IDs
+    if 'team' in enhanced_squad.columns:
+        # Create team name mapping from the team data we fetched earlier
+        try:
+            # Use the team data from the global tm DataFrame if available
+            team_map = {row['id']: row['name'] for _, row in tm.iterrows()}
+            enhanced_squad['team_name'] = enhanced_squad['team'].map(team_map).fillna('Unknown')
+        except Exception as e:
+            logging.warning(f"Could not map team names: {e}")
+            enhanced_squad['team_name'] = enhanced_squad['team'].astype(str)
+    else:
+        enhanced_squad['team_name'] = 'Unknown'
     
     # Add readable position in lineup
     enhanced_squad['lineup_position'] = enhanced_squad.apply(lambda row: 
@@ -1329,8 +1351,8 @@ def save_and_access_results(squad, df):
     # Format price for readability (convert 0.1M units to M)
     enhanced_squad['fpl_price'] = enhanced_squad['now_cost'].apply(lambda x: f'£{x/10:.1f}M')
     
-    # Reorder columns for best viewing experience
-    final_columns = [
+    # Reorder columns for best viewing experience (only include existing columns)
+    desired_order = [
         'lineup_position',
         'web_name', 
         'team_name',
@@ -1341,6 +1363,9 @@ def save_and_access_results(squad, df):
         'points_per_game',
         'selected_by_percent'
     ]
+    
+    # Only include columns that actually exist
+    final_columns = [col for col in desired_order if col in enhanced_squad.columns]
     
     enhanced_squad[final_columns].to_csv(current_file, index=False)
     locations.append(os.path.abspath(current_file))
