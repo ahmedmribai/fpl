@@ -1299,10 +1299,53 @@ def save_and_access_results(squad, df):
     # 🎯 OPTION 1: Save to multiple easy-to-find locations
     locations = []
     
-    # Current directory (where script runs)
+    # Current directory (where script runs) - Enhanced CSV with team and value info
     current_file = f"{base_filename}.csv"
-    squad.to_csv(current_file, index=False)
+    
+    # Create enhanced CSV with key columns for easy viewing
+    enhanced_squad = squad[[
+        'web_name',           # Player name
+        'team_name',          # Current team (Arsenal, Liverpool, etc.)
+        'element_type_name',  # Position (GK, DEF, MID, FWD)
+        'now_cost',          # Current FPL price (in 0.1M units)
+        'value',             # Current FPL price (in M units, easier to read)
+        'exp_pts',           # Expected points
+        'is_start',          # Starting XI (True/False)
+        'is_captain',        # Captain (True/False)
+        'is_vice',           # Vice-captain (True/False)
+        'selected_by_percent', # Ownership %
+        'total_points',      # Season points so far
+        'points_per_game'    # Points per game average
+    ]].copy()
+    
+    # Add readable position in lineup
+    enhanced_squad['lineup_position'] = enhanced_squad.apply(lambda row: 
+        '👑 CAPTAIN' if row['is_captain'] else
+        '🥈 VICE' if row['is_vice'] else
+        '🏁 STARTER' if row['is_start'] else
+        '🪑 BENCH', axis=1
+    )
+    
+    # Format price for readability (convert 0.1M units to M)
+    enhanced_squad['fpl_price'] = enhanced_squad['now_cost'].apply(lambda x: f'£{x/10:.1f}M')
+    
+    # Reorder columns for best viewing experience
+    final_columns = [
+        'lineup_position',
+        'web_name', 
+        'team_name',
+        'element_type_name',
+        'fpl_price',
+        'exp_pts',
+        'total_points',
+        'points_per_game',
+        'selected_by_percent'
+    ]
+    
+    enhanced_squad[final_columns].to_csv(current_file, index=False)
     locations.append(os.path.abspath(current_file))
+    
+    logging.info(f"📊 Enhanced CSV created with team names, FPL prices, and lineup positions!")
     
     # Desktop copy (most accessible)
     try:
